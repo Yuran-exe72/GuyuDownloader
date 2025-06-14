@@ -8,9 +8,6 @@ const YTDlpWrap = require('yt-dlp-wrap').default;
 const token = '8105537723:AAHx2dnfypfyFhnYFccBkTFX2ezGmqp4N10';
 const bot = new TelegramBot(token, { polling: true });
 
-// Objeto para armazenar o link temporário de cada usuário
-const estadoUsuario = {};
-
 // Quando o bot recebe uma mensagem
 bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
@@ -18,13 +15,12 @@ bot.on('message', async (msg) => {
 
   // Verifica se a mensagem contém link do YouTube
   if (texto && (texto.includes('youtube.com') || texto.includes('youtu.be'))) {
-    estadoUsuario[chatId] = texto;
 
     const opcoes = {
       reply_markup: {
         inline_keyboard: [
-          [{ text: '🎞 Baixar Vídeo', callback_data: 'video' }],
-          [{ text: '🎵 Baixar Áudio (MP3)', callback_data: 'audio' }]
+          [{ text: '🎞 Baixar Vídeo', callback_data: `video|${texto}` }],
+          [{ text: '🎵 Baixar Áudio (MP3)', callback_data: `audio|${texto}` }]
         ]
       }
     };
@@ -38,8 +34,7 @@ bot.on('message', async (msg) => {
 // Quando o usuário clica no botão
 bot.on('callback_query', async (query) => {
   const chatId = query.message.chat.id;
-  const opcao = query.data;
-  const link = estadoUsuario[chatId];
+  const [opcao, link] = query.data.split('|');
 
   if (!link) {
     bot.sendMessage(chatId, '🚫 Nenhum link encontrado. Envie um link primeiro.');
