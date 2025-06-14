@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const YTDlpWrap = require('yt-dlp-wrap').default;
 
-// Usa o seu token do Telegram aqui
+
 const token = '8105537723:AAHx2dnfypfyFhnYFccBkTFX2ezGmqp4N10';
 const bot = new TelegramBot(token, { polling: true });
 
@@ -15,7 +15,6 @@ bot.on('message', async (msg) => {
 
   // Verifica se a mensagem contém link do YouTube
   if (texto && (texto.includes('youtube.com') || texto.includes('youtu.be'))) {
-
     const opcoes = {
       reply_markup: {
         inline_keyboard: [
@@ -41,7 +40,8 @@ bot.on('callback_query', async (query) => {
     return;
   }
 
-  bot.sendMessage(chatId, `🔄 Iniciando download de ${opcao.toUpperCase()}...`);
+  // Desabilitar os botões
+  const loadingMessage = await bot.sendMessage(chatId, `🔄 Iniciando download de ${opcao.toUpperCase()}...`);
 
   try {
     const ytDlpWrap = new YTDlpWrap();
@@ -81,9 +81,11 @@ bot.on('callback_query', async (query) => {
     }
 
     fs.unlinkSync(filePath);
+    await bot.deleteMessage(chatId, loadingMessage.message_id); // Remove a mensagem de carregamento
 
   } catch (error) {
     console.error("Erro ao baixar:", error);
     bot.sendMessage(chatId, "❌ Ocorreu um erro ao processar o download.");
+    await bot.deleteMessage(chatId, loadingMessage.message_id); // Remove a mensagem de carregamento
   }
 });
