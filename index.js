@@ -1,11 +1,10 @@
-//Bibliotecas necessárias
+// Bibliotecas necessárias
 const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs');
 const path = require('path');
-const { exec } = require('child_process');
+const YTDlpWrap = require('yt-dlp-wrap').default;
 
-
-
+// Usa o seu token do Telegram aqui
 const token = '8105537723:AAHx2dnfypfyFhnYFccBkTFX2ezGmqp4N10';
 const bot = new TelegramBot(token, { polling: true });
 
@@ -19,10 +18,8 @@ bot.on('message', async (msg) => {
 
   // Verifica se a mensagem contém link do YouTube
   if (texto && (texto.includes('youtube.com') || texto.includes('youtu.be'))) {
-    // Salva o link na memória temporária
     estadoUsuario[chatId] = texto;
 
-    // Envia as opções para o usuário escolher
     const opcoes = {
       reply_markup: {
         inline_keyboard: [
@@ -51,66 +48,47 @@ bot.on('callback_query', async (query) => {
 
   bot.sendMessage(chatId, `🔄 Iniciando download de ${opcao.toUpperCase()}...`);
 
-  // Comando para pegar o título do vídeo do YouTube
-  const getTitleCommand = `yt-dlp.exe --get-title ${link}`;
+  try {
+    const ytDlpWrap = new YTDlpWrap();
+    const extensao = opcao === 'audio' ? 'mp3' : 'mp4';
+    const fileName = `download_${Date.now()}.${extensao}`;
+    const filePath = path.resolve(__dirname, fileName);
 
-  exec(getTitleCommand, (err, stdout, stderr) => {
-    if (err) {
-      console.error('❌ Erro ao pegar título:', err);
-      bot.sendMessage(chatId, '❌ Erro ao pegar o título do vídeo.');
+    const args = [
+      link,
+      '-o', filePath
+    ];
+
+    if (opcao === 'audio') {
+      args.push('-f', 'bestaudio');
+      args.push('--extract-audio');
+      args.push('--audio-format', 'mp3');
+    } else {
+      args.push('-f', 'bestvideo+bestaudio');
+      args.push('--merge-output-format', 'mp4');
+    }
+
+    await ytDlpWrap.exec(args);
+
+    const stats = fs.statSync(filePath);
+    const maxSize = 49 * 1024 * 1024; // 49MB
+
+    if (stats.size > maxSize) {
+      bot.sendMessage(chatId, "⚠️ O arquivo é maior do que o limite permitido pelo Telegram (49MB).");
+      fs.unlinkSync(filePath);
       return;
     }
 
-    // Pega o título e remove espaços extras
-    let titulo = stdout.trim();
-
-    // Sanitiza o título para remover caracteres inválidos para nomes de arquivo
-    titulo = titulo.replace(/[\/\\?%*:|"<>]/g, '-');
-
-    // Define a extensão de acordo com a opção escolhida
-    const extensao = opcao === 'audio' ? 'mp3' : 'mp4';
-
-    // Cria o nome do arquivo com o título e timestamp para evitar duplicidade
-    const fileName = `${titulo}_${Date.now()}.${extensao}`;
-
-    // Caminho absoluto do arquivo
-    const filePath = path.resolve(__dirname, fileName);
-
-    // Monta o comando yt-dlp com o nome do arquivo correto
-    let comando = '';
     if (opcao === 'video') {
-      comando = `yt-dlp.exe -f mp4 -o "${filePath}" ${link}`;
-    } else if (opcao === 'audio') {
-      comando = `yt-dlp.exe -f bestaudio -x --audio-format mp3 -o "${filePath}" ${link}`;
+      await bot.sendVideo(chatId, filePath);
+    } else {
+      await bot.sendAudio(chatId, filePath);
     }
 
-    // Executa o download
-    exec(comando, async (error, stdout2, stderr2) => {
-      if (error) {
-        console.error('❌ Erro ao baixar:', error);
-        bot.sendMessage(chatId, `❌ Erro ao baixar: ${error.message}`);
-        return;
-      }
+    fs.unlinkSync(filePath);
 
-      // Verifica tamanho do arquivo
-      const stats = fs.statSync(filePath);
-      const maxSize = 49 * 1024 * 1024; // 49MB
-
-      if (stats.size > maxSize) {
-        bot.sendMessage(chatId, "⚠️ O arquivo é maior do que o limite permitido pelo Telegram (49MB).");
-        fs.unlinkSync(filePath);
-        return;
-      }
-
-      // Envia o arquivo conforme opção
-      if (opcao === 'video') {
-        await bot.sendVideo(chatId, filePath);
-      } else if (opcao === 'audio') {
-        await bot.sendAudio(chatId, filePath);
-      }
-
-      // Apaga arquivo local depois do envio
-      fs.unlinkSync(filePath);
-    });
-  });
+  } catch (error) {
+    console.error("Erro ao baixar:", error);
+    bot.sendMessage(chatId, "❌ Ocorreu um erro ao processar o download.");
+  }
 });
