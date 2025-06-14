@@ -1,0 +1,5 @@
+node_modules/
+ffmpeg.exe
+ffprobe.exe
+yt-dlp.exe.exe
+*.webm
